@@ -14,7 +14,7 @@ impl Default for LoginwData {
 }
 
 #[repr(u16)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum LoginwRequestType {
     /// bytes -> fd -- Open an input (evdev) device fd (by full path)
     LoginwOpenInput = 0,
@@ -54,7 +54,7 @@ impl LoginwRequest {
 }
 
 #[repr(u16)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum LoginwResponseType {
     LoginwError = 0,
     LoginwDone = 1,

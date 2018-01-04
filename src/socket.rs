@@ -6,11 +6,22 @@ use nix::sys::socket::{recvmsg, sendmsg, CmsgSpace, ControlMessage, MsgFlags};
 
 pub struct Socket {
     pub fd: RawFd,
+    pub temp: bool,
 }
 
 impl Socket {
     pub fn new(fd: RawFd) -> Socket {
-        Socket { fd: fd }
+        Socket {
+            fd,
+            temp: false,
+        }
+    }
+
+    pub fn temp_clone(&self) -> Socket {
+        Socket {
+            fd: self.fd,
+            temp: true,
+        }
     }
 
     pub fn recvmsg<T>(&self) -> nix::Result<(T, Option<RawFd>)> {
@@ -18,7 +29,7 @@ impl Socket {
         let iov = [IoVec::from_mut_slice(&mut buf[..])];
         let mut rfd = None;
         let mut cmsgspace: CmsgSpace<[RawFd; 1]> = CmsgSpace::new();
-        let msg = recvmsg(self.fd, &iov, Some(&mut cmsgspace), MsgFlags::empty())?;
+        let msg = recvmsg(self.fd, &iov, Some(&mut cmsgspace), MsgFlags::MSG_CMSG_CLOEXEC)?;
         if msg.bytes != mem::size_of::<T>() {
             return Err(nix::Error::Sys(errno::Errno::ENOMSG));
         }
@@ -44,6 +55,8 @@ impl Socket {
 
 impl Drop for Socket {
     fn drop(&mut self) {
-        unistd::close(self.fd).expect("close");
+        if !self.temp {
+            let _ = unistd::close(self.fd);
+        }
     }
 }
