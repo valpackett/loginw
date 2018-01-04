@@ -1,0 +1,25 @@
+[package]
+name = "loginw"
+version = "0.0.0"
+authors = [ "Greg V <greg@unrelenting.technology>" ]
+keywords = [ "System", "Desktop" ]
+description = "setuid wrapper for Wayland compositors"
+license = "Unlicense"
+readme = "README.md"
+homepage = "https://github.com/myfreeweb/loginw"
+repository = "https://github.com/myfreeweb/loginw"
+
+[dependencies]
+#libc = "0"
+libc = { path = "../../rust-lang/libc" }
+#nix = "0.9"
+nix = { path = "../../nix-rust/nix" }
+lazy_static = "1"
+
+[build-dependencies]
+pkg-config = "0.3"
+
+[patch.crates-io]
+libc = { path = "../../rust-lang/libc" }
+[patch."https://github.com/rust-lang/libc"]
+libc = { path = "../../rust-lang/libc" }
