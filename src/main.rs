@@ -182,37 +182,37 @@ impl Loginw {
             Signal::SIGUSR1 => {
                 info!("received SIGUSR1 while is_active:{}", self.is_active);
                 if self.is_active {
-                    self.is_active = false;
-                    for fd in self.input_devs.iter() {
-                        debug!("closing input device fd {}", fd);
-                        let _ = unistd::close(*fd);
-                    }
                     if let Some(drm_dev) = self.drm_dev {
+                        self.is_active = false;
+                        for fd in self.input_devs.iter() {
+                            debug!("closing input device fd {}", fd);
+                            let _ = unistd::close(*fd);
+                        }
                         self.send(LoginwResponseType::LoginwDeactivated, OutData::Nothing, None);
                         debug!("dropping DRM master");
                         unsafe { drmDropMaster(drm_dev) };
+                        if let Some(ref vt) = self.vt {
+                            vt.ack_release();
+                        } else {
+                            warn!("no VT");
+                        }
                     } else {
                         warn!("no DRM device");
-                    }
-                    if let Some(ref vt) = self.vt {
-                        vt.ack_release();
-                    } else {
-                        warn!("no VT");
                     }
                 } else {
-                    if let Some(ref vt) = self.vt {
-                        vt.ack_acquire();
-                    } else {
-                        warn!("no VT");
-                    }
                     if let Some(drm_dev) = self.drm_dev {
+                        if let Some(ref vt) = self.vt {
+                            vt.ack_acquire();
+                        } else {
+                            warn!("no VT");
+                        }
                         debug!("setting DRM master");
                         unsafe { drmSetMaster(drm_dev) };
+                        self.is_active = true;
+                        self.send(LoginwResponseType::LoginwActivated, OutData::Nothing, None);
                     } else {
                         warn!("no DRM device");
                     }
-                    self.is_active = true;
-                    self.send(LoginwResponseType::LoginwActivated, OutData::Nothing, None);
                 }
             },
             s => warn!("unknown signal received from kqueue {:?}", s),
