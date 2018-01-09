@@ -183,12 +183,12 @@ impl Loginw {
                 info!("received SIGUSR1 while is_active:{}", self.is_active);
                 if self.is_active {
                     self.is_active = false;
-                    self.send(LoginwResponseType::LoginwDeactivated, OutData::Nothing, None);
                     for fd in self.input_devs.iter() {
                         debug!("closing input device fd {}", fd);
                         let _ = unistd::close(*fd);
                     }
                     if let Some(drm_dev) = self.drm_dev {
+                        self.send(LoginwResponseType::LoginwDeactivated, OutData::Nothing, None);
                         debug!("dropping DRM master");
                         unsafe { drmDropMaster(drm_dev) };
                     } else {
