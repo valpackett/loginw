@@ -8,6 +8,7 @@ extern crate pretty_env_logger;
 mod protocol;
 mod socket;
 mod priority;
+mod sandbox;
 mod vt;
 
 use std::{env, str};
@@ -288,9 +289,7 @@ fn main() {
         // Parent
         drop(Socket::new(sock_child));
         let mut server = Loginw::new(Socket::new(sock_parent), child_pd);
-        if unsafe { cap_enter() } != 0 {
-            panic!("cap_enter");
-        }
+        sandbox::sandbox();
         server.mainloop();
     } else {
         // Child
@@ -305,11 +304,6 @@ fn main() {
             .env("LOGINW_FD", format!("{}", sock_child))
             .exec();
     }
-}
-
-#[link(name = "c")]
-extern "C" {
-    fn cap_enter() -> libc::c_int;
 }
 
 #[link(name = "drm")]
