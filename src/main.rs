@@ -7,6 +7,7 @@ extern crate pretty_env_logger;
 
 mod protocol;
 mod socket;
+mod priority;
 mod vt;
 
 use std::{env, str};
@@ -23,6 +24,8 @@ use nix::sys::signal::*;
 use nix::sys::socket::{socketpair, AddressFamily, SockFlag, SockType};
 use protocol::*;
 use socket::*;
+
+ioctl!(write_int eviocrevoke with 'E', 0x91);
 
 enum OutData<'a> {
     Nothing,
@@ -81,7 +84,7 @@ impl Loginw {
             },
             OutData::U64(n) => {
                 debug!("Sending {:?} | u64 data '{}' | fd {:?}", typ, n, fd);
-                unsafe { resp.dat.u64 = n };
+                resp.dat.u64 = n;
             }
         }
         self.sock.sendmsg(&resp, fd).expect(".sendmsg");
@@ -186,6 +189,7 @@ impl Loginw {
                         self.is_active = false;
                         for fd in self.input_devs.iter() {
                             debug!("closing input device fd {}", fd);
+                            unsafe { eviocrevoke(*fd, 0); }
                             let _ = unistd::close(*fd);
                         }
                         self.send(LoginwResponseType::LoginwDeactivated, OutData::Nothing, None);
@@ -291,6 +295,9 @@ fn main() {
     } else {
         // Child
         drop(Socket::new(sock_parent));
+        if !priority::make_realtime() {
+            warn!("Could not set realtime priority");
+        }
         Command::new(&args[1])
             .args(&args[2..])
             .uid(libc::uid_t::from(unistd::getuid()) as _)
