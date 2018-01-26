@@ -1,4 +1,5 @@
 extern crate libc;
+extern crate pdfork;
 #[macro_use]
 extern crate nix;
 #[macro_use]
@@ -17,6 +18,7 @@ use std::ffi::{CStr, OsString};
 use std::process::Command;
 use std::os::unix::process::CommandExt;
 use std::os::unix::io::RawFd;
+use pdfork::*;
 use nix::{errno, unistd};
 use nix::fcntl::{self, OFlag, FdFlag, FcntlArg};
 use nix::sys::stat;
@@ -37,7 +39,7 @@ enum OutData<'a> {
 struct Loginw {
     kq: RawFd,
     dev_dir: RawFd,
-    child_pd: RawFd,
+    child_proc: ChildHandle,
     sock: Socket,
     vt: Option<vt::Vt>,
     input_devs: Vec<RawFd>,
@@ -47,9 +49,9 @@ struct Loginw {
 
 impl Drop for Loginw {
     fn drop(&mut self) {
-        // Do not allow child to hang around without us, as that causes endless
+        // (child_proc gets auto dropped)
+        // ^^^ do not allow child to hang around without us, as that causes endless
         // "broken pipe" console spam with libweston
-        let _ = unistd::close(self.child_pd);
         if let Some(drm_dev) = self.drm_dev {
             unsafe { drmDropMaster(drm_dev) };
             let _ = unistd::close(drm_dev);
@@ -61,12 +63,12 @@ impl Drop for Loginw {
 }
 
 impl Loginw {
-    fn new(sock: Socket, child_pd: RawFd) -> Loginw {
+    fn new(sock: Socket, child_proc: ChildHandle) -> Loginw {
         Loginw {
             kq: kqueue().expect("kqueue"),
             dev_dir: fcntl::open("/dev", OFlag::O_DIRECTORY | OFlag::O_CLOEXEC | OFlag::O_NONBLOCK, stat::Mode::empty())
                 .expect("open"),
-            child_pd,
+            child_proc,
             sock,
             vt: None,
             input_devs: Vec::new(),
@@ -181,7 +183,7 @@ impl Loginw {
         match signal {
             Signal::SIGTERM | Signal::SIGINT => {
                 info!("received {:?}", signal);
-                let _ = unsafe { libc::pdkill(self.child_pd, signal as libc::c_int) };
+                let _ = self.child_proc.signal(signal as libc::c_int);
             },
             Signal::SIGUSR1 => {
                 info!("received SIGUSR1 while is_active:{}", self.is_active);
@@ -237,7 +239,7 @@ impl Loginw {
             self.kq,
             &vec![
                 KEvent::new(self.sock.fd as usize, EventFilter::EVFILT_READ, add, filt, 0, 0),
-                KEvent::new(self.child_pd as usize, EventFilter::EVFILT_PROCDESC, add, filt, 0, 0),
+                KEvent::new(self.child_proc.child_pd as usize, EventFilter::EVFILT_PROCDESC, add, filt, 0, 0),
                 KEvent::new(Signal::SIGINT as usize, EventFilter::EVFILT_SIGNAL, add, filt, 0, 0),
                 KEvent::new(Signal::SIGTERM as usize, EventFilter::EVFILT_SIGNAL, add, filt, 0, 0),
                 KEvent::new(Signal::SIGUSR1 as usize, EventFilter::EVFILT_SIGNAL, add, filt, 0, 0),
@@ -281,28 +283,26 @@ fn main() {
     let (sock_parent, sock_child) =
         socketpair(AddressFamily::Unix, SockType::SeqPacket, None, SockFlag::empty()).expect("socketpair");
     fcntl::fcntl(sock_parent, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC)).expect("fcntl");
-    let mut child_pd = -1;
-    let pid = unsafe { libc::pdfork(&mut child_pd, 0) };
-    if pid < 0 {
-        panic!("pdfork");
-    } else if pid > 0 {
-        // Parent
-        drop(Socket::new(sock_child));
-        let mut server = Loginw::new(Socket::new(sock_parent), child_pd);
-        sandbox::sandbox();
-        server.mainloop();
-    } else {
-        // Child
-        drop(Socket::new(sock_parent));
-        if !priority::make_realtime() {
-            warn!("Could not set realtime priority");
+    match fork() {
+        ForkResult::Fail => panic!("fork"),
+        ForkResult::Parent(child_proc) => {
+            drop(Socket::new(sock_child));
+            let mut server = Loginw::new(Socket::new(sock_parent), child_proc);
+            sandbox::sandbox();
+            server.mainloop();
+        },
+        ForkResult::Child => {
+            drop(Socket::new(sock_parent));
+            if !priority::make_realtime() {
+                warn!("Could not set realtime priority");
+            }
+            Command::new(&args[1])
+                .args(&args[2..])
+                .uid(libc::uid_t::from(unistd::getuid()) as _)
+                .gid(libc::uid_t::from(unistd::getgid()) as _)
+                .env("LOGINW_FD", format!("{}", sock_child))
+                .exec();
         }
-        Command::new(&args[1])
-            .args(&args[2..])
-            .uid(libc::uid_t::from(unistd::getuid()) as _)
-            .gid(libc::uid_t::from(unistd::getgid()) as _)
-            .env("LOGINW_FD", format!("{}", sock_child))
-            .exec();
     }
 }
 

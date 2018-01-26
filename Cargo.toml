@@ -14,6 +14,7 @@ repository = "https://github.com/myfreeweb/loginw"
 libc = { path = "../../rust-lang/libc" }
 #nix = "0.9"
 nix = { path = "../../nix-rust/nix" }
+pdfork = { path = "../pdfork" }
 lazy_static = "1"
 log = "0.4.0-rc1"
 pretty_env_logger = "0.2.0-rc.1"
