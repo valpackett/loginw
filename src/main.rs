@@ -296,10 +296,14 @@ fn main() {
             if !priority::make_realtime() {
                 warn!("Could not set realtime priority");
             }
+            let user_info = unsafe { &*libc::getpwuid(libc::getuid()) };
+            if unsafe { libc::initgroups(user_info.pw_name, user_info.pw_gid) } != 0 {
+                panic!("initgroups");
+            }
             Command::new(&args[1])
                 .args(&args[2..])
-                .uid(libc::uid_t::from(unistd::getuid()) as _)
-                .gid(libc::uid_t::from(unistd::getgid()) as _)
+                .uid(user_info.pw_uid)
+                .gid(user_info.pw_gid)
                 .env("LOGINW_FD", format!("{}", sock_child))
                 .exec();
         }

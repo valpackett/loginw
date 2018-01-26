@@ -1,4 +1,5 @@
 extern crate loginw;
+extern crate libc;
 #[macro_use]
 extern crate nix;
 
@@ -27,5 +28,7 @@ fn main() {
     println!("Read {} bytes from ioctl", unsafe { evdev_name(event0fd.unwrap(), &mut name_buf[..]).unwrap() });
     let name_str = unsafe { CStr::from_ptr(&name_buf[0] as *const u8 as *const _) };
     println!("/dev/input/event0 is a '{}'", str::from_utf8(name_str.to_bytes()).expect("from_utf8()"));
+    let user_info = unsafe { &*libc::getpwuid(libc::getuid()) };
+    println!("running as uid {} gid {}", user_info.pw_uid, user_info.pw_gid);
     thread::sleep(Duration::from_secs(2));
 }
