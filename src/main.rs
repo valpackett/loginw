@@ -28,7 +28,7 @@ use nix::sys::socket::{socketpair, AddressFamily, SockFlag, SockType};
 use protocol::*;
 use socket::*;
 
-ioctl!(write_int eviocrevoke with 'E', 0x91);
+ioctl_write_int!(eviocrevoke, 'E', 0x91);
 
 enum OutData<'a> {
     Nothing,

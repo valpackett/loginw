@@ -11,6 +11,9 @@ pub fn make_realtime() -> bool {
     }
 }
 
+#[allow(dead_code)]
+fn as_u64(x: u8) -> u64 { x as u64 }
+
 #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
 pub fn make_normal() -> bool {
     unsafe {

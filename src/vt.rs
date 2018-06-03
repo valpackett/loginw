@@ -24,22 +24,22 @@ const VT_AUTO: libc::c_char = 0;
 const VT_PROCESS: libc::c_char = 1;
 const VT_TRUE: libc::c_int = 1;
 const VT_ACKACQ: libc::c_int = 2;
-ioctl!(read vt_openqry with VT_IOC_MAGIC, 1; libc::c_int);
-ioctl!(write_buf vt_setmode with VT_IOC_MAGIC, 2; VtMode);
-ioctl!(write_int vt_reldisp with VT_IOC_MAGIC, 4);
-ioctl!(write_int vt_activate with VT_IOC_MAGIC, 5);
-ioctl!(write_int vt_waitactive with VT_IOC_MAGIC, 6);
-ioctl!(read vt_getmode with VT_IOC_MAGIC, 3; VtMode);
-ioctl!(read vt_getindex with VT_IOC_MAGIC, 8; libc::c_int);
+ioctl_read!(vt_openqry, VT_IOC_MAGIC, 1, libc::c_int);
+ioctl_write_buf!(vt_setmode, VT_IOC_MAGIC, 2, VtMode);
+ioctl_write_int!(vt_reldisp, VT_IOC_MAGIC, 4);
+ioctl_write_int!(vt_activate, VT_IOC_MAGIC, 5);
+ioctl_write_int!(vt_waitactive, VT_IOC_MAGIC, 6);
+ioctl_read!(vt_getmode, VT_IOC_MAGIC, 3, VtMode);
+ioctl_read!(vt_getindex, VT_IOC_MAGIC, 8, libc::c_int);
 
 const KD_IOC_MAGIC: char = 'K';
 const K_RAW: libc::c_int = 0;
 const KD_TEXT: libc::c_int = 0;
 const KD_GRAPHICS: libc::c_int = 1;
-ioctl!(read kdgkbmode with KD_IOC_MAGIC, 6; libc::c_int);
-ioctl!(write_int kdskbmode with KD_IOC_MAGIC, 7);
-ioctl!(read kdgetmode with KD_IOC_MAGIC, 9; libc::c_int);
-ioctl!(write_int kdsetmode with KD_IOC_MAGIC, 10);
+ioctl_read!(kdgkbmode, KD_IOC_MAGIC, 6, libc::c_int);
+ioctl_write_int!(kdskbmode, KD_IOC_MAGIC, 7);
+ioctl_read!(kdgetmode, KD_IOC_MAGIC, 9, libc::c_int);
+ioctl_write_int!(kdsetmode, KD_IOC_MAGIC, 10);
 
 pub struct Vt {
     pub tty_fd: RawFd,

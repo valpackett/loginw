@@ -14,7 +14,7 @@ use loginw::socket::*;
 
 const EVDEV_IOC_MAGIC: char = 'E';
 const EVDEV_IOC_GNAME: u8 = 0x06;
-ioctl!(read_buf evdev_name with EVDEV_IOC_MAGIC, EVDEV_IOC_GNAME; u8);
+ioctl_read_buf!(evdev_name, EVDEV_IOC_MAGIC, EVDEV_IOC_GNAME, u8);
 
 fn main() {
     let fd = env::var("LOGINW_FD").expect("No LOGINW_FD, launch under loginw");
