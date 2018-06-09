@@ -20,8 +20,8 @@ use std::os::unix::process::CommandExt;
 use std::os::unix::io::{RawFd, AsRawFd};
 use pdfork::*;
 use tiny_nix_ipc::Socket;
-use nix::{errno, unistd};
-use nix::fcntl::{self, OFlag, FdFlag, FcntlArg};
+use nix::unistd;
+use nix::fcntl::{self, OFlag};
 use nix::sys::stat;
 use nix::sys::event::*;
 use nix::sys::signal::*;
@@ -199,7 +199,7 @@ impl Loginw {
                         self.is_active = false;
                         for fd in self.input_devs.iter() {
                             debug!("closing input device fd {}", fd);
-                            unsafe { eviocrevoke(*fd, 0); }
+                            let _ = unsafe { eviocrevoke(*fd, 0) };
                             let _ = unistd::close(*fd);
                         }
                         self.send(LoginwResponseType::LoginwDeactivated, OutData::Nothing, None);
@@ -255,9 +255,9 @@ impl Loginw {
             0,
         ).expect("kevent");
         unsafe {
-            sigaction(Signal::SIGINT,  &SigAction::new(SigHandler::SigIgn, SaFlags::empty(), SigSet::empty()));
-            sigaction(Signal::SIGTERM, &SigAction::new(SigHandler::SigIgn, SaFlags::empty(), SigSet::empty()));
-            sigaction(Signal::SIGUSR1, &SigAction::new(SigHandler::SigIgn, SaFlags::empty(), SigSet::empty()));
+            sigaction(Signal::SIGINT,  &SigAction::new(SigHandler::SigIgn, SaFlags::empty(), SigSet::empty())).unwrap();
+            sigaction(Signal::SIGTERM, &SigAction::new(SigHandler::SigIgn, SaFlags::empty(), SigSet::empty())).unwrap();
+            sigaction(Signal::SIGUSR1, &SigAction::new(SigHandler::SigIgn, SaFlags::empty(), SigSet::empty())).unwrap();
         }
         loop {
             let mut eventlist = vec![KEvent::new(0, EventFilter::EVFILT_READ, EventFlag::empty(), FilterFlag::empty(), 0, 0)];

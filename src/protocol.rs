@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // cbindgen can't add a prefix to everything, so we have Loginw* names here :(
 
 #[repr(C)]
