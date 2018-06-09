@@ -1,4 +1,5 @@
 extern crate libc;
+extern crate rusty_sandbox;
 extern crate pdfork;
 extern crate tiny_nix_ipc;
 #[macro_use]
@@ -9,7 +10,6 @@ extern crate pretty_env_logger;
 
 mod protocol;
 mod priority;
-mod sandbox;
 mod vt;
 
 use std::{env, str};
@@ -294,7 +294,7 @@ fn main() {
         ForkResult::Parent(child_proc) => {
             drop(sock_child);
             let mut server = Loginw::new(sock_parent, child_proc);
-            sandbox::sandbox();
+            rusty_sandbox::Sandbox::new().sandbox_this_process();
             server.mainloop();
         },
         ForkResult::Child => {
