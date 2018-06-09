@@ -12,6 +12,7 @@ repository = "https://github.com/myfreeweb/loginw"
 [dependencies]
 libc = "0.2"
 nix = "0.11"
+tiny-nix-ipc = "0"
 pdfork = "0"
 lazy_static = "1"
 log = "0.4"

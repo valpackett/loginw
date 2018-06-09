@@ -1,5 +1,6 @@
 extern crate libc;
 extern crate pdfork;
+extern crate tiny_nix_ipc;
 #[macro_use]
 extern crate nix;
 #[macro_use]
@@ -7,7 +8,6 @@ extern crate log;
 extern crate pretty_env_logger;
 
 mod protocol;
-mod socket;
 mod priority;
 mod sandbox;
 mod vt;
@@ -17,16 +17,15 @@ use std::io::Write;
 use std::ffi::{CStr, OsString};
 use std::process::Command;
 use std::os::unix::process::CommandExt;
-use std::os::unix::io::RawFd;
+use std::os::unix::io::{RawFd, AsRawFd};
 use pdfork::*;
+use tiny_nix_ipc::Socket;
 use nix::{errno, unistd};
 use nix::fcntl::{self, OFlag, FdFlag, FcntlArg};
 use nix::sys::stat;
 use nix::sys::event::*;
 use nix::sys::signal::*;
-use nix::sys::socket::{socketpair, AddressFamily, SockFlag, SockType};
 use protocol::*;
-use socket::*;
 
 ioctl_write_int!(eviocrevoke, 'E', 0x91);
 
@@ -77,7 +76,7 @@ impl Loginw {
         }
     }
 
-    fn send(&self, typ: LoginwResponseType, dat: OutData, fd: Option<RawFd>) {
+    fn send(&mut self, typ: LoginwResponseType, dat: OutData, fd: Option<RawFd>) {
         let mut resp = LoginwResponse::new(typ);
         match dat {
             OutData::Nothing => debug!("Sending {:?} | no data | fd {:?}", typ, fd),
@@ -90,7 +89,11 @@ impl Loginw {
                 resp.dat.u64 = n;
             }
         }
-        self.sock.sendmsg(&resp, fd).expect(".sendmsg");
+        if let Some(fd) = fd {
+            self.sock.send_struct(&resp, Some(&[fd][..])).expect(".sendmsg");
+        } else {
+            self.sock.send_struct(&resp, None).expect(".sendmsg");
+        }
     }
 
     fn process(&mut self, mut req: LoginwRequest) {
@@ -157,8 +160,12 @@ impl Loginw {
                 } else {
                     info!("VT requested, resending");
                 }
-                if let Some(ref vt) = self.vt {
-                    self.send(LoginwResponseType::LoginwPassedFd, OutData::U64(vt.vt_num as u64), Some(vt.tty_fd));
+                if self.vt.is_some() {
+                    let (num, fd) = {
+                        let vt = self.vt.as_ref().unwrap();
+                        (OutData::U64(vt.vt_num as u64), vt.tty_fd)
+                    };
+                    self.send(LoginwResponseType::LoginwPassedFd, num, Some(fd));
                 } else {
                     self.send(LoginwResponseType::LoginwError, OutData::Nothing, None);
                 }
@@ -168,9 +175,9 @@ impl Loginw {
     }
 
     fn on_sock_event(&mut self) -> bool {
-        match self.sock.recvmsg::<LoginwRequest>() {
+        match self.sock.recv_struct::<LoginwRequest, [RawFd; 0]>() {
             Ok((req, _)) => self.process(req),
-            Err(nix::Error::Sys(errno::Errno::ENOMSG)) => {
+            Err(tiny_nix_ipc::errors::Error(tiny_nix_ipc::errors::ErrorKind::WrongRecvLength, _)) => {
                 info!("child process died");
                 return false;
             },
@@ -238,7 +245,7 @@ impl Loginw {
         kevent(
             self.kq,
             &vec![
-                KEvent::new(self.sock.fd as usize, EventFilter::EVFILT_READ, add, filt, 0, 0),
+                KEvent::new(self.sock.as_raw_fd() as usize, EventFilter::EVFILT_READ, add, filt, 0, 0),
                 KEvent::new(self.child_proc.child_pd as usize, EventFilter::EVFILT_PROCDESC, add, filt, 0, 0),
                 KEvent::new(Signal::SIGINT as usize, EventFilter::EVFILT_SIGNAL, add, filt, 0, 0),
                 KEvent::new(Signal::SIGTERM as usize, EventFilter::EVFILT_SIGNAL, add, filt, 0, 0),
@@ -280,19 +287,18 @@ fn main() {
     if args.len() < 2 {
         panic!("No args");
     }
-    let (sock_parent, sock_child) =
-        socketpair(AddressFamily::Unix, SockType::SeqPacket, None, SockFlag::empty()).expect("socketpair");
-    fcntl::fcntl(sock_parent, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC)).expect("fcntl");
+    let (sock_parent, mut sock_child) = Socket::new_socketpair().expect("socketpair");
+    sock_child.no_cloexec().unwrap();
     match fork() {
         ForkResult::Fail => panic!("fork"),
         ForkResult::Parent(child_proc) => {
-            drop(Socket::new(sock_child));
-            let mut server = Loginw::new(Socket::new(sock_parent), child_proc);
+            drop(sock_child);
+            let mut server = Loginw::new(sock_parent, child_proc);
             sandbox::sandbox();
             server.mainloop();
         },
         ForkResult::Child => {
-            drop(Socket::new(sock_parent));
+            drop(sock_parent);
             if !priority::make_realtime() {
                 warn!("Could not set realtime priority");
             }
@@ -304,7 +310,7 @@ fn main() {
                 .args(&args[2..])
                 .uid(user_info.pw_uid)
                 .gid(user_info.pw_gid)
-                .env("LOGINW_FD", format!("{}", sock_child))
+                .env("LOGINW_FD", format!("{}", sock_child.as_raw_fd()))
                 .exec();
         }
     }
