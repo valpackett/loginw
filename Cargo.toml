@@ -12,7 +12,7 @@ repository = "https://github.com/myfreeweb/loginw"
 [dependencies]
 libc = "0.2"
 nix = "0.11"
-pdfork = { path = "../pdfork" }
+pdfork = "0"
 lazy_static = "1"
 log = "0.4"
 pretty_env_logger = "0.2"
