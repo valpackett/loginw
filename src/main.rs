@@ -113,7 +113,7 @@ impl Loginw {
                 }
                 match fcntl::openat(
                     self.dev_dir,
-                    &dat_str.replace("/dev/", "") as &str,
+                    &format!("input/{}", dat_str.split('/').next_back().unwrap_or(" ")) as &str,
                     OFlag::O_RDWR | OFlag::O_CLOEXEC | OFlag::O_NONBLOCK,
                     stat::Mode::empty(),
                 ) {
@@ -131,13 +131,13 @@ impl Loginw {
                 if self.drm_dev.is_some() {
                     warn!("opening more than one DRM device");
                 }
-                if !(dat_str.starts_with("/dev/dri") || dat_str.starts_with("/dev/drm")) {
+                if !dat_str.starts_with("/dev/dri") {
                     self.send(LoginwResponseType::LoginwError, OutData::Str(&format!("Not a DRM device path: {}", dat_str)), None);
                     return;
                 }
                 match fcntl::openat(
                     self.dev_dir,
-                    &dat_str.replace("/dev/", "") as &str,
+                    &format!("dri/{}", dat_str.split('/').next_back().unwrap_or(" ")) as &str,
                     OFlag::O_RDWR | OFlag::O_CLOEXEC | OFlag::O_NONBLOCK,
                     stat::Mode::empty(),
                 ) {
