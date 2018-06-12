@@ -57,7 +57,6 @@ impl Drop for Loginw {
         }
         let _ = unistd::close(self.kq);
         let _ = unistd::close(self.dev_dir);
-        // TODO: switch back to previous vt
     }
 }
 

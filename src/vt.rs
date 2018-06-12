@@ -30,6 +30,7 @@ ioctl_write_int!(vt_reldisp, VT_IOC_MAGIC, 4);
 ioctl_write_int!(vt_activate, VT_IOC_MAGIC, 5);
 ioctl_write_int!(vt_waitactive, VT_IOC_MAGIC, 6);
 ioctl_read!(vt_getmode, VT_IOC_MAGIC, 3, VtMode);
+ioctl_read!(vt_getactive, VT_IOC_MAGIC, 7, libc::c_int);
 ioctl_read!(vt_getindex, VT_IOC_MAGIC, 8, libc::c_int);
 
 const KD_IOC_MAGIC: char = 'K';
@@ -45,6 +46,7 @@ pub struct Vt {
     pub tty_fd: RawFd,
     pub vt_num: libc::c_int,
     original_kb_mode: libc::c_int,
+    original_vt_num: libc::c_int,
 }
 
 impl Drop for Vt {
@@ -60,6 +62,7 @@ impl Drop for Vt {
         let mode = VtMode { mode: VT_AUTO, waitv: 0, relsig: 0, acqsig: 0, frsig: 0 };
         debug!("setting vt mode");
         unsafe { vt_setmode(self.tty_fd, &[mode]) }.expect("vt_setmode");
+        switch_to(self.tty_fd, self.original_vt_num);
         let _ = unistd::close(self.tty_fd);
     }
 }
@@ -96,12 +99,12 @@ impl Vt {
         debug!("setting vt mode");
         unsafe { vt_setmode(tty_fd, &[mode]) }.expect("vt_setmode");
 
-        debug!("activating vt");
-        unsafe { vt_activate(tty_fd, vt_num) }.expect("vt_activate");
-        debug!("waiting for vt activation");
-        unsafe { vt_waitactive(tty_fd, vt_num) }.expect("vt_waitactive");
+        let mut original_vt_num = 0;
+        unsafe { vt_getactive(tty_fd, &mut original_vt_num) }.expect("vt_getactive");
+        debug!("old active vt number: {}", original_vt_num);
+        switch_to(tty_fd, vt_num);
 
-        Vt { tty_fd, vt_num, original_kb_mode }
+        Vt { tty_fd, vt_num, original_kb_mode, original_vt_num }
     }
 
     pub fn ack_release(&self) {
@@ -113,6 +116,13 @@ impl Vt {
         debug!("acknowledging vt acquire");
         unsafe { vt_reldisp(self.tty_fd, VT_ACKACQ) }.expect("vt_reldisp");
     }
+}
+
+fn switch_to(tty_fd: RawFd, vt_num: libc::c_int) {
+    debug!("activating vt {}", vt_num);
+    unsafe { vt_activate(tty_fd, vt_num) }.expect("vt_activate");
+    debug!("waiting for vt {} activation", vt_num);
+    unsafe { vt_waitactive(tty_fd, vt_num) }.expect("vt_waitactive");
 }
 
 pub fn open_tty(dev_dir: RawFd, tty_num: libc::c_int) -> nix::Result<RawFd> {
