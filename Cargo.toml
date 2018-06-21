@@ -14,7 +14,7 @@ libc = "0.2"
 nix = "0.11"
 tiny-nix-ipc = "0"
 pdfork = "0"
-rusty-sandbox = { version = "0", path = "../rusty-sandbox" }
+rusty-sandbox = "0"
 lazy_static = "1"
 log = "0.4"
 pretty_env_logger = "0.2"
